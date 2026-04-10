@@ -1536,6 +1536,12 @@ window.addEventListener('resize', () => {
   const params = new URLSearchParams(window.location.search);
   const pdfUrl = params.get('pdf');
   if(!pdfUrl) return;
+
+  // Embed mode: hide header and remove top offset
+  $('header').style.display = 'none';
+  uploadScreen.style.top  = '0';
+  viewerScreen.style.top  = '0';
+
   showLoad('Descargando PDF...', 10);
   try {
     const resp = await fetch(pdfUrl);
