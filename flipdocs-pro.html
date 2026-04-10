@@ -312,6 +312,21 @@ canvas{display:block;}
 #book.single-mode #pg-left{display:none;}
 #book.single-mode #spine{display:none;}
 
+/* Navigation arrows */
+.nav-arrow{
+  position:absolute;top:50%;transform:translateY(-50%);
+  z-index:20;width:48px;height:100px;border-radius:12px;
+  background:rgba(255,255,255,0);color:rgba(255,255,255,0.18);
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  transition:background 0.2s,color 0.2s,opacity 0.3s;
+  opacity:0;border:none;
+}
+#viewer-body:hover .nav-arrow:not(:disabled){opacity:1;}
+.nav-arrow:hover{background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.9);}
+.nav-arrow:disabled{opacity:0!important;pointer-events:none;}
+.nav-arrow-left{left:10px;}
+.nav-arrow-right{right:10px;}
+
 /* Zoom badge */
 .zoom-float-badge{
   position:absolute;z-index:20;
@@ -620,6 +635,13 @@ canvas{display:block;}
       <div id="thumbs-inner"></div>
     </div>
 
+    <button id="nav-prev" class="nav-arrow nav-arrow-left" onclick="prevPage()" title="Página anterior" disabled>
+      <svg width="16" height="30" viewBox="0 0 16 30" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3L4 15 12 27"/></svg>
+    </button>
+    <button id="nav-next" class="nav-arrow nav-arrow-right" onclick="nextPage()" title="Página siguiente" disabled>
+      <svg width="16" height="30" viewBox="0 0 16 30" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3L12 15 4 27"/></svg>
+    </button>
+
     <div id="stage">
       <div id="book-wrap">
         <div id="book">
@@ -778,6 +800,8 @@ const shareModal    = $('share-modal');
 const btnSpread     = $('btn-spread');
 const btnThumbs     = $('btn-thumbs');
 const btnShareHdr   = $('btn-share-header');
+const navPrev       = $('nav-prev');
+const navNext       = $('nav-next');
 
 /* ════════════════════════════════════════════════
    FILE INPUT HANDLERS
@@ -811,37 +835,41 @@ document.addEventListener('drop', e => {
 ════════════════════════════════════════════════ */
 async function loadPDF(file) {
   fileName = file.name.replace(/\.pdf$/i,'');
-  showLoad('Cargando archivo...', 5);
+  showLoad('Cargando...', 5);
 
-  // Liberar blob URL anterior
   if(currentBlobUrl) { URL.revokeObjectURL(currentBlobUrl); currentBlobUrl = null; }
 
   try {
     currentBlobUrl = URL.createObjectURL(file);
-    showLoad('Analizando estructura...', 20);
 
     const loadTask = pdfjsLib.getDocument({ url: currentBlobUrl, rangeChunkSize: 65536 });
     loadTask.onProgress = ({ loaded, total: t }) => {
-      if(t) showLoad('Cargando PDF...', Math.min(75, 20 + (loaded / t) * 55));
+      if(t) showLoad('Cargando PDF...', Math.min(85, 5 + (loaded / t) * 80));
     };
     pdf = await loadTask.promise;
     total = pdf.numPages;
 
-    cur = 1;
-    zoom = 1.0;
-    spread = total > 1;
-    thumbsOpen = false;
-    flipping = false;
+    cur = 1; zoom = 1.0; spread = total > 1;
+    thumbsOpen = false; flipping = false;
     pageCache.clear();
 
-    showLoad('Preparando visor...', 85);
+    // Calcular zoom desde dimensiones de página (sin necesidad de renderizar)
+    const p1    = await pdf.getPage(1);
+    const vp0   = p1.getViewport({ scale: 1 });
+    const sw    = stage.clientWidth  - 60;
+    const sh    = stage.clientHeight - 60;
+    const cols  = (spread && total > 1) ? 2 : 1;
+    const bookW = vp0.width * cols + (spread && total > 1 ? 10 : 0);
+    fitZoomValue = Math.min(sw / bookW, sh / vp0.height, 2.5);
+    zoom = fitZoomValue;
 
+    // Mostrar el visor inmediatamente — las páginas aparecerán al renderizarse
     showViewer();
-    await fitPage(false);
+    hideLoad();
+
+    await renderPages();
     renderThumbs();
 
-    showLoad('Listo', 100);
-    setTimeout(hideLoad, 300);
   } catch(err) {
     hideLoad();
     toast('❌ Error al cargar el PDF: ' + err.message);
@@ -1276,6 +1304,9 @@ function updateUI() {
   $('btn-prev').disabled  = cur <= (spread ? 2 : 1);
   $('btn-next').disabled  = cur >= total;
   $('btn-last').disabled  = cur >= total;
+
+  navPrev.disabled = cur <= (spread ? 2 : 1);
+  navNext.disabled = cur >= total;
 
   btnSpread.classList.toggle('active', spread);
 }
