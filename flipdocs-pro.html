@@ -735,6 +735,7 @@ let pageH      = 0;
 let fileName   = '';
 let fitZoomValue = 1.0;
 let renderVersion = 0;
+let currentBlobUrl = null;
 
 const DPR = Math.min(window.devicePixelRatio || 1, 2);
 
@@ -812,15 +813,19 @@ async function loadPDF(file) {
   fileName = file.name.replace(/\.pdf$/i,'');
   showLoad('Cargando archivo...', 5);
 
-  try {
-    const ab = await file.arrayBuffer();
-    showLoad('Analizando estructura...', 30);
+  // Liberar blob URL anterior
+  if(currentBlobUrl) { URL.revokeObjectURL(currentBlobUrl); currentBlobUrl = null; }
 
-    const loadTask = pdfjsLib.getDocument({ data: ab });
+  try {
+    currentBlobUrl = URL.createObjectURL(file);
+    showLoad('Analizando estructura...', 20);
+
+    const loadTask = pdfjsLib.getDocument({ url: currentBlobUrl, rangeChunkSize: 65536 });
+    loadTask.onProgress = ({ loaded, total: t }) => {
+      if(t) showLoad('Cargando PDF...', Math.min(75, 20 + (loaded / t) * 55));
+    };
     pdf = await loadTask.promise;
     total = pdf.numPages;
-
-    showLoad('Renderizando páginas...', 60);
 
     cur = 1;
     zoom = 1.0;
@@ -856,9 +861,10 @@ function backToUpload() {
   viewerScreen.style.display = 'none';
   uploadScreen.style.display = 'flex';
   btnShareHdr.style.display  = 'none';
-  // Reset thumbs
   if(thumbsOpen) { thumbsOpen = false; thumbsPanel.classList.remove('open'); }
   thumbsInner.innerHTML = '';
+  if(currentBlobUrl) { URL.revokeObjectURL(currentBlobUrl); currentBlobUrl = null; }
+  pdf = null;
 }
 
 /* ════════════════════════════════════════════════
