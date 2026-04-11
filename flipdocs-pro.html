@@ -242,17 +242,19 @@ canvas{display:block;}
 }
 #stage:active{cursor:grabbing;}
 #stage.zoom-cursor{cursor:zoom-in;}
-/* Inner wrapper: always ≥ 100% of stage → centers content AND allows scroll */
+/* Inner: ≥ 100% of stage in both axes so margin:auto can center the book;
+   NO justify-content:center — that clips left overflow even with overflow:auto */
 #stage-inner{
-  display:flex;align-items:center;justify-content:center;
+  display:flex;align-items:center;
   min-width:100%;min-height:100%;
   padding:30px 20px;box-sizing:border-box;
 }
 
-/* Book wrap */
+/* Book wrap: margin:auto centers when content < stage; collapses to 0 when larger → scroll works both directions */
 #book-wrap{
   perspective:3000px;flex-shrink:0;
   position:relative;
+  margin:0 auto;
 }
 #book{
   display:flex;align-items:stretch;
@@ -310,18 +312,19 @@ canvas{display:block;}
 #book.single-mode #pg-left{display:none;}
 #book.single-mode #spine{display:none;}
 
-/* Page-render loader (center of viewer) */
-#page-loader{
-  position:absolute;top:50%;left:50%;
-  transform:translate(-50%,-50%);
-  width:44px;height:44px;border-radius:50%;
-  border:3px solid rgba(255,255,255,0.08);
-  border-top-color:rgba(255,255,255,0.55);
-  animation:spin 0.75s linear infinite;
-  pointer-events:none;z-index:25;
+/* First-render progress bar (bottom of viewer) */
+#render-bar-wrap{
+  position:absolute;bottom:0;left:0;right:0;
+  height:3px;background:rgba(255,255,255,0.05);
   opacity:0;transition:opacity 0.2s;
+  pointer-events:none;z-index:30;
 }
-#page-loader.visible{opacity:1;}
+#render-bar-wrap.visible{opacity:1;}
+#render-bar{
+  height:100%;width:0%;
+  background:linear-gradient(90deg,var(--accent),var(--accent2));
+  transition:width 0.4s ease;
+}
 
 /* Navigation arrows */
 .nav-arrow{
@@ -596,7 +599,7 @@ canvas{display:block;}
       <svg width="16" height="30" viewBox="0 0 16 30" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3L12 15 4 27"/></svg>
     </button>
 
-    <div id="page-loader"></div>
+    <div id="render-bar-wrap"><div id="render-bar"></div></div>
     <div id="stage">
       <div id="stage-inner">
         <div id="book-wrap">
@@ -803,7 +806,7 @@ async function loadPDF(file) {
     // Mostrar visor inmediatamente — páginas aparecen al renderizarse
     showViewer();
     hideLoad();
-
+    firstRender = true;
     await renderPages();
     renderThumbs();
 
@@ -861,7 +864,7 @@ async function fitPage(doRender = true) {
 async function renderPages(dir) {
   if(!pdf) return;
   const ver = ++renderVersion;
-  showPageLoader();
+  if(firstRender) showRenderBar();
 
   // Determine which pages to show
   const rightPage = cur;
@@ -873,7 +876,7 @@ async function renderPages(dir) {
     renderOnCanvas(rightPage, cvRight, ver)
   ]);
 
-  if(ver !== renderVersion) { hidePageLoader(); return; }
+  if(ver !== renderVersion) { if(firstRender) hideRenderBar(); return; }
 
   // Size the book
   if(pageW && pageH) {
@@ -886,11 +889,11 @@ async function renderPages(dir) {
   // Spread / single
   if(spread && total > 1) {
     book.classList.remove('single-mode');
-    pgLeft.style.display = '';   // dejar que CSS controle (no inline)
+    pgLeft.style.display = '';
     if(leftPage === 0) { clearCanvas(cvLeft); }
   } else {
     book.classList.add('single-mode');
-    pgLeft.style.display = '';   // limpiar inline para que CSS display:none funcione
+    pgLeft.style.display = '';
   }
 
   updateUI();
@@ -898,7 +901,7 @@ async function renderPages(dir) {
   if(dir) await doFlip(dir);
   else    updateThumbActive();
 
-  hidePageLoader();
+  if(firstRender) { hideRenderBar(); firstRender = false; }
   preloadAdjacent(); // fire-and-forget: cache adjacent pages for next navigation
 }
 
@@ -1289,17 +1292,31 @@ function hideLoad() {
 }
 
 /* ════════════════════════════════════════════════
-   PAGE LOADER (circular, center of viewer)
+   RENDER BAR (first-load only, bottom of viewer)
 ════════════════════════════════════════════════ */
-let pageLoaderTimer;
-function showPageLoader() {
-  clearTimeout(pageLoaderTimer);
-  $('page-loader').classList.add('visible');
+let firstRender = false;
+let renderBarTimer;
+function showRenderBar() {
+  const wrap = $('render-bar-wrap');
+  const bar  = $('render-bar');
+  clearTimeout(renderBarTimer);
+  bar.style.transition = 'none';
+  bar.style.width = '0%';
+  wrap.classList.add('visible');
+  requestAnimationFrame(() => {
+    bar.style.transition = 'width 0.5s ease';
+    bar.style.width = '70%';
+  });
 }
-function hidePageLoader() {
-  pageLoaderTimer = setTimeout(() => {
-    $('page-loader').classList.remove('visible');
-  }, 80);
+function hideRenderBar() {
+  const bar  = $('render-bar');
+  const wrap = $('render-bar-wrap');
+  bar.style.transition = 'width 0.15s ease';
+  bar.style.width = '100%';
+  renderBarTimer = setTimeout(() => {
+    wrap.classList.remove('visible');
+    setTimeout(() => { bar.style.width = '0%'; }, 250);
+  }, 200);
 }
 
 /* ════════════════════════════════════════════════
@@ -1591,6 +1608,7 @@ window.addEventListener('resize', () => {
 
     showLoad('Preparando visor...', 85);
     showViewer();
+    firstRender = true;
     await fitPage(false);
     renderThumbs();
 
