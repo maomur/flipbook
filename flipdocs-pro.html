@@ -305,18 +305,29 @@ canvas{display:block;}
 #book.single-mode #pg-left{display:none;}
 #book.single-mode #spine{display:none;}
 
-/* First-render progress bar (bottom of viewer) */
-#render-bar-wrap{
-  position:absolute;bottom:0;left:0;right:0;
-  height:3px;background:rgba(255,255,255,0.05);
-  opacity:0;transition:opacity 0.2s;
-  pointer-events:none;z-index:30;
+/* Page loader — centered, shown during initial preload */
+#page-loader{
+  position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  z-index:25;display:none;
+  flex-direction:column;align-items:center;gap:16px;
+  background:rgba(8,10,15,0.85);
+  backdrop-filter:blur(12px);
+  border-radius:18px;padding:32px 44px;
+  border:1px solid rgba(255,255,255,0.1);
+  box-shadow:0 12px 48px rgba(0,0,0,0.6);
+  pointer-events:none;
 }
-#render-bar-wrap.visible{opacity:1;}
-#render-bar{
-  height:100%;width:0%;
-  background:linear-gradient(90deg,var(--accent),var(--accent2));
-  transition:width 0.4s ease;
+#page-loader.visible{display:flex;}
+.page-loader-spinner{
+  width:40px;height:40px;border-radius:50%;
+  border:3px solid rgba(79,142,247,0.2);
+  border-top-color:var(--accent);
+  animation:spin 0.8s linear infinite;
+}
+.page-loader-text{
+  font-size:13px;color:rgba(255,255,255,0.75);
+  font-weight:500;text-align:center;line-height:1.6;
 }
 
 /* Navigation arrows */
@@ -591,7 +602,10 @@ canvas{display:block;}
       <svg width="16" height="30" viewBox="0 0 16 30" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3L12 15 4 27"/></svg>
     </button>
 
-    <div id="render-bar-wrap"><div id="render-bar"></div></div>
+    <div id="page-loader">
+      <div class="page-loader-spinner"></div>
+      <div class="page-loader-text" id="page-loader-text">Preparando<br>presentación…</div>
+    </div>
     <div id="stage">
       <div id="book-wrap">
         <div id="book">
@@ -852,7 +866,6 @@ async function fitPage(doRender = true) {
 async function renderPages(dir) {
   if(!pdf) return;
   const ver = ++renderVersion;
-  if(firstRender) showRenderBar();
 
   // Determine which pages to show
   const rightPage = cur;
@@ -864,7 +877,7 @@ async function renderPages(dir) {
     renderOnCanvas(rightPage, cvRight, ver)
   ]);
 
-  if(ver !== renderVersion) { if(firstRender) hideRenderBar(); return; }
+  if(ver !== renderVersion) return;
 
   // Size the book
   if(pageW && pageH) {
@@ -893,11 +906,11 @@ async function renderPages(dir) {
   if(dir) await doFlip(dir);
   else    updateThumbActive();
 
-  // Preload adjacent pages; on first render keep the bar visible until done
+  // On first render: show centered loader, block navigation, preload 10% of pages
   if(firstRender) {
-    const barVer = ++preloadBarVer;
-    preloadAdjacent(ver).then(() => {
-      if(preloadBarVer === barVer) { hideRenderBar(); firstRender = false; }
+    showPageLoader();
+    preloadInitial(ver).then(() => {
+      if(renderVersion === ver) { hidePageLoader(); firstRender = false; }
     });
   } else {
     preloadAdjacent(ver); // fire-and-forget
@@ -985,6 +998,22 @@ async function preloadAdjacent(callerVer) {
     if(!pageCache.has(key)) {
       const cv = document.createElement('canvas');
       await renderOnCanvas(p, cv, myVer);
+    }
+  }
+}
+
+/* ════════════════════════════════════════════════
+   PRELOAD INITIAL (10% of pages — blocks navigation)
+════════════════════════════════════════════════ */
+async function preloadInitial(callerVer) {
+  if(!pdf) return;
+  const target = Math.max(2, Math.ceil(total * 0.1));
+  for(let p = 1; p <= Math.min(target, total); p++) {
+    if(renderVersion !== callerVer) return; // navigation fired — stop
+    const key = `${p}@${zoom.toFixed(3)}`;
+    if(!pageCache.has(key)) {
+      const cv = document.createElement('canvas');
+      await renderOnCanvas(p, cv, callerVer);
     }
   }
 }
@@ -1082,7 +1111,7 @@ async function doFlip(dir) {
    NAVIGATION
 ════════════════════════════════════════════════ */
 function nextPage() {
-  if(!pdf || flipping) return;
+  if(!pdf || flipping || preloading) return;
   const step = (spread && total > 1) ? 2 : 1;
   if(cur + step - 1 >= total) return;
   cur = Math.min(cur + step, total);
@@ -1090,7 +1119,7 @@ function nextPage() {
 }
 
 function prevPage() {
-  if(!pdf || flipping) return;
+  if(!pdf || flipping || preloading) return;
   const step = (spread && total > 1) ? 2 : 1;
   if(cur <= 1) return;
   cur = Math.max(cur - step, 1);
@@ -1098,7 +1127,7 @@ function prevPage() {
 }
 
 function goToPage(n) {
-  if(!pdf || flipping) return;
+  if(!pdf || flipping || preloading) return;
   const target = Math.max(1, Math.min(n, total));
   if(target === cur) return;
   const dir = target > cur ? 'forward' : 'backward';
@@ -1112,8 +1141,8 @@ function goToPage(n) {
   renderPages(dir);
 }
 
-function goFirst() { if(cur > 1) { cur = spread && total > 1 ? 2 : 1; renderPages('backward'); } }
-function goLast()  { if(cur < total) { cur = total % 2 === 0 ? total : (spread && total > 1 ? total - 1 : total); if(cur < 1) cur = 1; renderPages('forward'); } }
+function goFirst() { if(!preloading && cur > 1) { cur = spread && total > 1 ? 2 : 1; renderPages('backward'); } }
+function goLast()  { if(!preloading && cur < total) { cur = total % 2 === 0 ? total : (spread && total > 1 ? total - 1 : total); if(cur < 1) cur = 1; renderPages('forward'); } }
 
 /* ════════════════════════════════════════════════
    ZOOM
@@ -1266,8 +1295,8 @@ function updateUI() {
   $('btn-first').disabled = cur <= (spread ? 2 : 1);
   $('btn-last').disabled  = cur >= total;
 
-  navPrev.disabled = dblZoomed || cur <= (spread ? 2 : 1);
-  navNext.disabled = dblZoomed || cur >= total;
+  navPrev.disabled = preloading || dblZoomed || cur <= (spread ? 2 : 1);
+  navNext.disabled = preloading || dblZoomed || cur >= total;
 
   // Ícono y tooltip del botón de spread: 2 hojas = doble página, 1 hoja = página única
   if(spread) {
@@ -1320,32 +1349,20 @@ function centerBook() {
 }
 
 /* ════════════════════════════════════════════════
-   RENDER BAR (first-load only, bottom of viewer)
+   PAGE LOADER (centered, shown during initial preload)
 ════════════════════════════════════════════════ */
 let firstRender = false;
-let preloadBarVer = 0;
-let renderBarTimer;
-function showRenderBar() {
-  const wrap = $('render-bar-wrap');
-  const bar  = $('render-bar');
-  clearTimeout(renderBarTimer);
-  bar.style.transition = 'none';
-  bar.style.width = '0%';
-  wrap.classList.add('visible');
-  requestAnimationFrame(() => {
-    bar.style.transition = 'width 0.5s ease';
-    bar.style.width = '70%';
-  });
+let preloading  = false;
+
+function showPageLoader() {
+  preloading = true;
+  $('page-loader').classList.add('visible');
+  updateUI(); // disable nav arrows immediately
 }
-function hideRenderBar() {
-  const bar  = $('render-bar');
-  const wrap = $('render-bar-wrap');
-  bar.style.transition = 'width 0.15s ease';
-  bar.style.width = '100%';
-  renderBarTimer = setTimeout(() => {
-    wrap.classList.remove('visible');
-    setTimeout(() => { bar.style.width = '0%'; }, 250);
-  }, 200);
+function hidePageLoader() {
+  preloading = false;
+  $('page-loader').classList.remove('visible');
+  updateUI(); // re-enable nav arrows
 }
 
 /* ════════════════════════════════════════════════
