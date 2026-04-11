@@ -965,10 +965,11 @@ async function renderPages(dir) {
   // Spread / single
   if(spread && total > 1) {
     book.classList.remove('single-mode');
-    pgLeft.style.display = leftPage > 0 ? 'block' : 'block';
+    pgLeft.style.display = '';   // dejar que CSS controle (no inline)
     if(leftPage === 0) { clearCanvas(cvLeft); }
   } else {
     book.classList.add('single-mode');
+    pgLeft.style.display = '';   // limpiar inline para que CSS display:none funcione
   }
 
   updateUI();
