@@ -1433,7 +1433,7 @@ stage.addEventListener('mouseup', e => {
   stage.style.cursor = 'grab';
 
   if(!mouseDrag) {
-    if(!dblZoomed) {
+    if(!dblZoomed && stage.scrollWidth <= stage.clientWidth + 1) {
       // Delay single-click navigation so dblclick can cancel it
       clickCount++;
       clickClientX = e.clientX;
@@ -1454,7 +1454,8 @@ stage.addEventListener('mouseup', e => {
   }
 
   clickCount = 0;
-  if(dblZoomed) return; // panning only when zoomed in
+  // Pan mode: either dblclick-zoomed OR stage actually overflows horizontally
+  if(dblZoomed || stage.scrollWidth > stage.clientWidth + 1) return;
   // Swipe navigation
   const absDX = Math.abs(totalDX);
   if(absDX > 50) {
@@ -1569,7 +1570,7 @@ stage.addEventListener('touchend', e => {
     renderPages();
     return;
   }
-  if(!dblZoomed && e.changedTouches.length === 1) {
+  if(!dblZoomed && stage.scrollWidth <= stage.clientWidth + 1 && e.changedTouches.length === 1) {
     const dx = e.changedTouches[0].clientX - tx0;
     const dy = e.changedTouches[0].clientY - ty0;
     if(Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) {
