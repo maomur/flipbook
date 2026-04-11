@@ -1681,10 +1681,12 @@ window.addEventListener('resize', () => {
   try {
     fileName = pdfUrl.split('/').pop().replace(/\.pdf$/i,'') || 'document';
     const loadTask = pdfjsLib.getDocument({ url: pdfUrl, rangeChunkSize: 65536 });
+    let progressActive = true;
     loadTask.onProgress = ({ loaded, total: t }) => {
-      if(t) showLoad('Descargando PDF...', Math.min(55, 5 + (loaded / t) * 50));
+      if(progressActive && t) showLoad('Descargando PDF...', Math.min(55, 5 + (loaded / t) * 50));
     };
     pdf = await loadTask.promise;
+    progressActive = false; // desactivar: onProgress puede seguir disparando al buscar páginas
     total = pdf.numPages;
 
     cur = 1; zoom = 1.0; spread = total > 1 && autoSpread();
