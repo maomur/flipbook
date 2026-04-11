@@ -206,13 +206,6 @@ canvas{display:block;}
 .tb-text-btn.accent{color:var(--accent);}
 .tb-text-btn.accent:hover{background:rgba(79,142,247,0.12);}
 
-/* Progress bar */
-#progress-wrap{height:2px;background:rgba(255,255,255,0.05);flex-shrink:0;}
-#progress-fill{
-  height:100%;width:0%;
-  background:linear-gradient(90deg,var(--accent),var(--accent2));
-  transition:width 0.4s ease;
-}
 
 /* VIEWER BODY */
 #viewer-body{
@@ -594,17 +587,11 @@ canvas{display:block;}
       <button class="tb-btn" id="btn-first" title="Primera página" onclick="goFirst()">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="1" y="2" width="2" height="10" rx="1"/><path d="M12 2.5L5.5 7 12 11.5V2.5z"/></svg>
       </button>
-      <button class="tb-btn" id="btn-prev" title="Página anterior" onclick="prevPage()">
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M8 1.5L3.5 6 8 10.5V1.5z"/></svg>
-      </button>
       <div class="page-pill">
         <input type="number" id="page-input" min="1" value="1" onchange="goToPage(parseInt(this.value))">
         <span class="sep">/</span>
         <span class="total" id="page-total">1</span>
       </div>
-      <button class="tb-btn" id="btn-next" title="Página siguiente" onclick="nextPage()">
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M4 1.5L8.5 6 4 10.5V1.5z"/></svg>
-      </button>
       <button class="tb-btn" id="btn-last" title="Última página" onclick="goLast()">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="11" y="2" width="2" height="10" rx="1"/><path d="M2 2.5L8.5 7 2 11.5V2.5z"/></svg>
       </button>
@@ -620,9 +607,6 @@ canvas{display:block;}
       <div class="zoom-badge" id="zoom-badge">100%</div>
       <button class="tb-btn" id="btn-zoom-in" title="Aumentar zoom" onclick="zoomIn()">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="3" y="6.25" width="8" height="1.5" rx="0.75"/><rect x="6.25" y="3" width="1.5" height="8" rx="0.75"/></svg>
-      </button>
-      <button class="tb-btn" title="Ajustar al ancho" onclick="fitPage()">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="1" y="1" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="4" y="4" width="6" height="6" rx="1"/></svg>
       </button>
     </div>
 
@@ -643,9 +627,6 @@ canvas{display:block;}
       </button>
     </div>
   </div>
-
-  <!-- Progress bar -->
-  <div id="progress-wrap"><div id="progress-fill"></div></div>
 
   <!-- Body: thumbs + stage -->
   <div id="viewer-body">
@@ -798,7 +779,6 @@ const viewerScreen  = $('viewer-screen');
 const loadOverlay   = $('load-overlay');
 const loadMsg       = $('load-msg');
 const loadBar       = $('load-bar');
-const progressFill  = $('progress-fill');
 const pageInput     = $('page-input');
 const pageTotal     = $('page-total');
 const zoomBadge     = $('zoom-badge');
@@ -936,6 +916,7 @@ function backToUpload() {
 ════════════════════════════════════════════════ */
 async function fitPage(doRender = true) {
   if(!pdf) return;
+  dblZoomed = false;
   stage.scrollLeft = 0;
   stage.scrollTop  = 0;
   const page = await pdf.getPage(1);
@@ -1342,12 +1323,7 @@ function updateUI() {
   pageTotal.textContent = total;
   zoomBadge.textContent = Math.round(zoom * 100) + '%';
 
-  const pct = total > 1 ? ((cur - 1) / (total - 1)) * 100 : 100;
-  progressFill.style.width = pct + '%';
-
   $('btn-first').disabled = cur <= (spread ? 2 : 1);
-  $('btn-prev').disabled  = cur <= (spread ? 2 : 1);
-  $('btn-next').disabled  = cur >= total;
   $('btn-last').disabled  = cur >= total;
 
   navPrev.disabled = cur <= (spread ? 2 : 1);
@@ -1572,6 +1548,10 @@ let mouseDrag = false;
 let mouseX0 = 0, mouseY0 = 0;
 let scrollX0 = 0, scrollY0 = 0;
 let totalDX = 0;
+let dblZoomed   = false;
+let clickCount  = 0;
+let clickTimer;
+let clickClientX, clickClientY;
 
 stage.addEventListener('mousedown', e => {
   if(e.button !== 0) return;
@@ -1601,15 +1581,25 @@ stage.addEventListener('mouseup', e => {
   stage.style.cursor = 'grab';
 
   if(!mouseDrag) {
-    // Click navigation
-    const rect  = stage.getBoundingClientRect();
-    const relX  = e.clientX - rect.left;
-    const third = rect.width / 3;
-    if(relX < third)      prevPage();
-    else if(relX > third*2) nextPage();
+    // Delay single-click navigation so dblclick can cancel it
+    clickCount++;
+    clickClientX = e.clientX;
+    clickClientY = e.clientY;
+    clearTimeout(clickTimer);
+    clickTimer = setTimeout(() => {
+      if(clickCount === 1) {
+        const rect  = stage.getBoundingClientRect();
+        const relX  = clickClientX - rect.left;
+        const third = rect.width / 3;
+        if(relX < third)        prevPage();
+        else if(relX > third*2) nextPage();
+      }
+      clickCount = 0;
+    }, 240);
     return;
   }
 
+  clickCount = 0;
   // Swipe navigation
   const absDX = Math.abs(totalDX);
   if(absDX > 50) {
@@ -1623,6 +1613,45 @@ stage.addEventListener('mouseup', e => {
 stage.addEventListener('mouseleave', () => {
   mouseDown = false;
   stage.style.cursor = 'grab';
+});
+
+/* Double-click zoom */
+stage.addEventListener('dblclick', e => {
+  clearTimeout(clickTimer);
+  clickCount = 0;
+  if(!pdf) return;
+
+  if(dblZoomed) {
+    dblZoomed = false;
+    fitPage();
+    return;
+  }
+
+  const newZoom = Math.min(fitZoomValue * 2.5, 3.0);
+  if(newZoom <= zoom + 0.01) return; // already at max
+
+  // Record click position as fraction within book-wrap
+  const bookWrapEl = $('book-wrap');
+  const origBookRect = bookWrapEl.getBoundingClientRect();
+  const fracX = (e.clientX - origBookRect.left) / origBookRect.width;
+  const fracY = (e.clientY - origBookRect.top)  / origBookRect.height;
+  const origClientX = e.clientX;
+  const origClientY = e.clientY;
+
+  zoom = newZoom;
+  dblZoomed = true;
+  pageCache.clear();
+
+  renderPages().then(() => {
+    requestAnimationFrame(() => {
+      // Scroll so the clicked point stays under the cursor
+      const newBookRect = bookWrapEl.getBoundingClientRect();
+      const newPtX = newBookRect.left + fracX * newBookRect.width;
+      const newPtY = newBookRect.top  + fracY * newBookRect.height;
+      stage.scrollLeft += newPtX - origClientX;
+      stage.scrollTop  += newPtY - origClientY;
+    });
+  });
 });
 
 /* Wheel zoom (Ctrl/Meta) or scroll */
