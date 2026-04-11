@@ -867,7 +867,7 @@ async function loadPDF(file) {
     clearInterval(tick);
     total = pdf.numPages;
 
-    cur = 1; zoom = 1.0; spread = total > 1;
+    cur = 1; zoom = 1.0; spread = total > 1 && autoSpread();
     thumbsOpen = false; flipping = false;
     pageCache.clear();
 
@@ -1217,10 +1217,14 @@ function showZoomBadge(x, y, txt) {
 /* ════════════════════════════════════════════════
    SPREAD / FULLSCREEN
 ════════════════════════════════════════════════ */
+// true = landscape (width > height) → doble página por defecto
+function autoSpread() {
+  return window.innerWidth > window.innerHeight;
+}
+
 function toggleSpread() {
   spread = !spread;
   if(spread && cur % 2 !== 0) cur = Math.min(cur + 1, total);
-  btnSpread.classList.toggle('active', spread);
   fitPage();
 }
 
@@ -1326,6 +1330,14 @@ function updateUI() {
   navPrev.disabled = cur <= (spread ? 2 : 1);
   navNext.disabled = cur >= total;
 
+  // Ícono y tooltip del botón de spread: 2 hojas = doble página, 1 hoja = página única
+  if(spread) {
+    btnSpread.title = 'Cambiar a página única';
+    btnSpread.innerHTML = `<svg width="16" height="14" viewBox="0 0 16 14" fill="currentColor"><rect x="0.5" y="1" width="6.5" height="12" rx="1.5"/><rect x="9" y="1" width="6.5" height="12" rx="1.5"/></svg>`;
+  } else {
+    btnSpread.title = 'Cambiar a doble página';
+    btnSpread.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="4" y="1" width="6" height="12" rx="1.5"/></svg>`;
+  }
   btnSpread.classList.toggle('active', spread);
 }
 
@@ -1639,7 +1651,15 @@ stage.addEventListener('touchend', e => {
 let resizeTimer;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => { if(pdf) fitPage(); }, 200);
+  resizeTimer = setTimeout(() => {
+    if(!pdf) return;
+    const shouldSpread = total > 1 && autoSpread();
+    if(shouldSpread !== spread) {
+      spread = shouldSpread;
+      if(spread && cur % 2 !== 0) cur = Math.min(cur + 1, total);
+    }
+    fitPage();
+  }, 200);
 });
 
 /* ════════════════════════════════════════════════
@@ -1665,7 +1685,7 @@ window.addEventListener('resize', () => {
     pdf = await loadTask.promise;
     total = pdf.numPages;
 
-    cur = 1; zoom = 1.0; spread = total > 1;
+    cur = 1; zoom = 1.0; spread = total > 1 && autoSpread();
     thumbsOpen = false; flipping = false;
     pageCache.clear();
 
