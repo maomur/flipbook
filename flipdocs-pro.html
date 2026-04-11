@@ -236,18 +236,23 @@ canvas{display:block;}
 
 /* Stage */
 #stage{
-  flex:1;overflow:auto;display:flex;
-  align-items:center;
-  padding:30px 20px;cursor:grab;user-select:none;
+  flex:1;overflow:auto;
+  cursor:grab;user-select:none;
   position:relative;
 }
 #stage:active{cursor:grabbing;}
 #stage.zoom-cursor{cursor:zoom-in;}
+/* Inner wrapper: always ≥ 100% of stage → centers content AND allows scroll */
+#stage-inner{
+  display:flex;align-items:center;justify-content:center;
+  min-width:100%;min-height:100%;
+  padding:30px 20px;box-sizing:border-box;
+}
 
 /* Book wrap */
 #book-wrap{
   perspective:3000px;flex-shrink:0;
-  position:relative;margin:auto;
+  position:relative;
 }
 #book{
   display:flex;align-items:stretch;
@@ -305,22 +310,18 @@ canvas{display:block;}
 #book.single-mode #pg-left{display:none;}
 #book.single-mode #spine{display:none;}
 
-/* Render progress bar (below book) */
-#render-bar-wrap{
-  position:absolute;bottom:-14px;left:0;right:0;
-  height:3px;border-radius:2px;
-  background:rgba(255,255,255,0.07);
-  overflow:hidden;
-  opacity:0;transition:opacity 0.25s;
-  pointer-events:none;z-index:5;
+/* Page-render loader (center of viewer) */
+#page-loader{
+  position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:44px;height:44px;border-radius:50%;
+  border:3px solid rgba(255,255,255,0.08);
+  border-top-color:rgba(255,255,255,0.55);
+  animation:spin 0.75s linear infinite;
+  pointer-events:none;z-index:25;
+  opacity:0;transition:opacity 0.2s;
 }
-#render-bar-wrap.visible{opacity:1;}
-#render-bar{
-  height:100%;width:0%;
-  background:linear-gradient(90deg,var(--accent),var(--accent2));
-  border-radius:2px;
-  transition:width 0.4s ease;
-}
+#page-loader.visible{opacity:1;}
 
 /* Navigation arrows */
 .nav-arrow{
@@ -429,21 +430,7 @@ canvas{display:block;}
   color:var(--muted);font-size:18px;transition:background 0.15s,color 0.15s;
 }
 .modal-close:hover{background:rgba(255,255,255,0.07);color:var(--text);}
-.modal-tabs{
-  display:flex;gap:4px;padding:16px 20px 0;
-  border-bottom:1px solid var(--border);
-}
-.modal-tab{
-  padding:8px 16px;border-radius:8px 8px 0 0;
-  font-size:13px;font-weight:500;color:var(--muted);
-  cursor:pointer;transition:color 0.15s,background 0.15s;
-  border-bottom:2px solid transparent;margin-bottom:-1px;
-}
-.modal-tab:hover{color:var(--text);}
-.modal-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
 .modal-body{padding:20px;}
-.tab-panel{display:none;}
-.tab-panel.active{display:block;}
 
 /* Share — URL display */
 .share-url-wrap{
@@ -456,11 +443,6 @@ canvas{display:block;}
   font-size:12px;color:var(--muted);font-family:monospace;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
-.privacy-note{
-  font-size:11px;color:var(--muted);text-align:center;padding-top:12px;
-  border-top:1px solid var(--border);margin-top:12px;
-}
-.privacy-note span{color:var(--accent);}
 
 /* Embed tab */
 .code-block{
@@ -614,32 +596,34 @@ canvas{display:block;}
       <svg width="16" height="30" viewBox="0 0 16 30" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3L12 15 4 27"/></svg>
     </button>
 
+    <div id="page-loader"></div>
     <div id="stage">
-      <div id="book-wrap">
-        <div id="book">
-          <div id="pg-left">
-            <canvas id="cv-left"></canvas>
-            <div class="fold-shadow"></div>
-            <div class="curl-hint"></div>
-          </div>
-          <div id="spine"></div>
-          <div id="pg-right">
-            <canvas id="cv-right"></canvas>
-            <div class="fold-shadow"></div>
-            <div class="curl-hint"></div>
-          </div>
-          <div id="flip-page">
-            <div class="flip-face flip-front-face">
-              <canvas id="cv-flip-front"></canvas>
-              <div class="flip-shadow" id="flip-shadow-front"></div>
+      <div id="stage-inner">
+        <div id="book-wrap">
+          <div id="book">
+            <div id="pg-left">
+              <canvas id="cv-left"></canvas>
+              <div class="fold-shadow"></div>
+              <div class="curl-hint"></div>
             </div>
-            <div class="flip-face flip-back-face">
-              <canvas id="cv-flip-back"></canvas>
-              <div class="flip-shadow" id="flip-shadow-back"></div>
+            <div id="spine"></div>
+            <div id="pg-right">
+              <canvas id="cv-right"></canvas>
+              <div class="fold-shadow"></div>
+              <div class="curl-hint"></div>
+            </div>
+            <div id="flip-page">
+              <div class="flip-face flip-front-face">
+                <canvas id="cv-flip-front"></canvas>
+                <div class="flip-shadow" id="flip-shadow-front"></div>
+              </div>
+              <div class="flip-face flip-back-face">
+                <canvas id="cv-flip-back"></canvas>
+                <div class="flip-shadow" id="flip-shadow-back"></div>
+              </div>
             </div>
           </div>
         </div>
-        <div id="render-bar-wrap"><div id="render-bar"></div></div>
       </div>
     </div>
   </div>
@@ -664,28 +648,11 @@ canvas{display:block;}
       <h3>Compartir documento</h3>
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
-    <div class="modal-tabs">
-      <div class="modal-tab active" onclick="switchTab('share')">Enlace</div>
-      <div class="modal-tab" onclick="switchTab('embed')">Embeber</div>
-    </div>
     <div class="modal-body">
-      <!-- Share tab -->
-      <div class="tab-panel active" id="tab-share">
-        <div class="share-url-wrap">
-          <input type="text" id="share-url-input" readonly>
-        </div>
-        <button class="modal-btn" id="btn-copy-link" onclick="copyLink()">🔗 Copiar enlace</button>
-        <div class="privacy-note">🔒 <span>El PDF nunca se sube a ningún servidor.</span> Todo ocurre localmente en tu navegador.</div>
+      <div class="share-url-wrap">
+        <input type="text" id="share-url-input" readonly>
       </div>
-
-      <!-- Embed tab -->
-      <div class="tab-panel" id="tab-embed">
-        <pre class="code-block" id="embed-code"></pre>
-        <button class="modal-btn" onclick="copyEmbed()">Copiar código embed</button>
-        <div class="embed-note">
-          Sube <code>flipdocs-pro.html</code> a cualquier host y pasa la URL del PDF como parámetro: <code>?pdf=https://tu-servidor.com/doc.pdf</code>
-        </div>
-      </div>
+      <button class="modal-btn" id="btn-copy-link" onclick="copyLink()">🔗 Copiar enlace</button>
     </div>
   </div>
 </div>
@@ -894,7 +861,7 @@ async function fitPage(doRender = true) {
 async function renderPages(dir) {
   if(!pdf) return;
   const ver = ++renderVersion;
-  showRenderBar();
+  showPageLoader();
 
   // Determine which pages to show
   const rightPage = cur;
@@ -906,7 +873,7 @@ async function renderPages(dir) {
     renderOnCanvas(rightPage, cvRight, ver)
   ]);
 
-  if(ver !== renderVersion) { hideRenderBar(); return; }
+  if(ver !== renderVersion) { hidePageLoader(); return; }
 
   // Size the book
   if(pageW && pageH) {
@@ -931,7 +898,7 @@ async function renderPages(dir) {
   if(dir) await doFlip(dir);
   else    updateThumbActive();
 
-  hideRenderBar();
+  hidePageLoader();
   preloadAdjacent(); // fire-and-forget: cache adjacent pages for next navigation
 }
 
@@ -1322,30 +1289,17 @@ function hideLoad() {
 }
 
 /* ════════════════════════════════════════════════
-   RENDER PROGRESS BAR (below book)
+   PAGE LOADER (circular, center of viewer)
 ════════════════════════════════════════════════ */
-let renderBarTimer;
-function showRenderBar() {
-  const wrap = $('render-bar-wrap');
-  const bar  = $('render-bar');
-  clearTimeout(renderBarTimer);
-  bar.style.transition = 'none';
-  bar.style.width = '0%';
-  wrap.classList.add('visible');
-  requestAnimationFrame(() => {
-    bar.style.transition = 'width 0.5s ease';
-    bar.style.width = '65%';
-  });
+let pageLoaderTimer;
+function showPageLoader() {
+  clearTimeout(pageLoaderTimer);
+  $('page-loader').classList.add('visible');
 }
-function hideRenderBar() {
-  const bar  = $('render-bar');
-  const wrap = $('render-bar-wrap');
-  bar.style.transition = 'width 0.15s ease';
-  bar.style.width = '100%';
-  renderBarTimer = setTimeout(() => {
-    wrap.classList.remove('visible');
-    setTimeout(() => { bar.style.width = '0%'; }, 250);
-  }, 180);
+function hidePageLoader() {
+  pageLoaderTimer = setTimeout(() => {
+    $('page-loader').classList.remove('visible');
+  }, 80);
 }
 
 /* ════════════════════════════════════════════════
@@ -1364,7 +1318,6 @@ function toast(msg) {
    SHARE MODAL
 ════════════════════════════════════════════════ */
 function openShareModal() {
-  buildEmbedCode();
   const urlInput = $('share-url-input');
   if(urlInput) urlInput.value = window.location.href;
   shareModal.classList.add('open');
@@ -1373,35 +1326,12 @@ function closeModal() {
   shareModal.classList.remove('open');
 }
 
-function switchTab(id) {
-  document.querySelectorAll('.modal-tab').forEach((t,i) => {
-    const ids = ['share','embed'];
-    t.classList.toggle('active', ids[i] === id);
-  });
-  document.querySelectorAll('.tab-panel').forEach(p => {
-    p.classList.toggle('active', p.id === 'tab-' + id);
-  });
-}
-
-function buildEmbedCode() {
-  const url = window.location.href;
-  const code = `<iframe\n  src="${url}"\n  width="100%"\n  height="600px"\n  style="border:none;border-radius:12px;"\n  allowfullscreen>\n</iframe>`;
-  $('embed-code').textContent = code;
-}
-
 function copyLink() {
   navigator.clipboard.writeText(window.location.href).then(() => {
     const btn = $('btn-copy-link');
     btn.textContent = '✓ ¡Enlace copiado!';
     toast('🔗 Enlace copiado');
     setTimeout(() => { btn.textContent = '🔗 Copiar enlace'; }, 2200);
-  }).catch(() => toast('❌ No se pudo copiar'));
-}
-
-function copyEmbed() {
-  const code = $('embed-code').textContent;
-  navigator.clipboard.writeText(code).then(() => {
-    toast('📋 Código embed copiado');
   }).catch(() => toast('❌ No se pudo copiar'));
 }
 
