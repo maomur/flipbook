@@ -237,7 +237,7 @@ canvas{display:block;}
 /* Stage */
 #stage{
   flex:1;overflow:auto;display:flex;
-  align-items:center;justify-content:center;
+  align-items:center;
   padding:30px 20px;cursor:grab;user-select:none;
   position:relative;
 }
@@ -247,7 +247,7 @@ canvas{display:block;}
 /* Book wrap */
 #book-wrap{
   perspective:3000px;flex-shrink:0;
-  position:relative;
+  position:relative;margin:auto;
 }
 #book{
   display:flex;align-items:stretch;
@@ -445,22 +445,20 @@ canvas{display:block;}
 .tab-panel{display:none;}
 .tab-panel.active{display:block;}
 
-/* Share cards grid */
-.share-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
-.share-card{
-  padding:16px;border-radius:14px;border:1px solid var(--border);
-  background:var(--surface2);cursor:pointer;
-  transition:border-color 0.2s,transform 0.2s,background 0.2s;
-  display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;
+/* Share — URL display */
+.share-url-wrap{
+  display:flex;align-items:center;
+  background:#0a0d14;border:1px solid var(--border);border-radius:10px;
+  padding:0 14px;height:40px;overflow:hidden;margin-bottom:12px;
 }
-.share-card:hover{border-color:rgba(255,255,255,0.14);transform:translateY(-2px);}
-.share-card.copied{border-color:rgba(34,197,94,0.5);background:rgba(34,197,94,0.06);}
-.share-card .sc-icon{font-size:24px;}
-.share-card .sc-label{font-size:12px;font-weight:500;color:var(--muted);}
-.share-card.copied .sc-label{color:#22c55e;}
+.share-url-wrap input{
+  flex:1;background:none;border:none;outline:none;
+  font-size:12px;color:var(--muted);font-family:monospace;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
 .privacy-note{
   font-size:11px;color:var(--muted);text-align:center;padding-top:12px;
-  border-top:1px solid var(--border);
+  border-top:1px solid var(--border);margin-top:12px;
 }
 .privacy-note span{color:var(--accent);}
 
@@ -474,31 +472,6 @@ canvas{display:block;}
 .embed-note code{
   color:var(--accent);background:rgba(79,142,247,0.1);
   padding:2px 6px;border-radius:4px;font-size:11px;
-}
-
-/* QR tab */
-.qr-container{
-  display:flex;flex-direction:column;align-items:center;gap:16px;
-  padding:10px 0;
-}
-#qr-canvas-wrap{
-  background:#fff;padding:16px;border-radius:12px;
-  display:inline-flex;
-}
-.qr-placeholder{
-  text-align:center;padding:20px;
-  background:var(--surface2);border:1px solid var(--border);
-  border-radius:12px;
-}
-.qr-placeholder h4{font-size:14px;margin-bottom:8px;color:var(--text);}
-.qr-placeholder p{font-size:12px;color:var(--muted);line-height:1.5;}
-.qr-placeholder .host-list{
-  margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;
-}
-.host-chip{
-  padding:4px 12px;border-radius:20px;
-  background:rgba(79,142,247,0.1);border:1px solid rgba(79,142,247,0.2);
-  font-size:11px;color:var(--accent);
 }
 
 /* Copy / download buttons */
@@ -617,7 +590,7 @@ canvas{display:block;}
       <button class="tb-btn" id="btn-spread" title="Doble página" onclick="toggleSpread()">
         <svg width="16" height="14" viewBox="0 0 16 14" fill="currentColor"><rect x="0.5" y="1" width="6.5" height="12" rx="1.5"/><rect x="9" y="1" width="6.5" height="12" rx="1.5"/></svg>
       </button>
-      <button class="tb-btn" title="Pantalla completa (F)" onclick="toggleFullscreen()">
+      <button class="tb-btn" id="btn-fullscreen" title="Pantalla completa (F)" onclick="toggleFullscreen()">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M1 1h4v2H3v2H1V1zM9 1h4v4h-2V3H9V1zM1 9h2v2h2v2H1V9zM11 11H9v2h4V9h-2v2z"/></svg>
       </button>
       <div class="tb-div"></div>
@@ -673,12 +646,13 @@ canvas{display:block;}
 </div>
 
 <!-- ═══════════════ LOADING OVERLAY ═══════════════ -->
-<div id="load-overlay">
+<div id="load-overlay" class="visible">
   <div class="load-spinner"></div>
   <div id="load-title">KidoDocs</div>
   <div id="load-msg">Iniciando...</div>
   <div id="load-bar-wrap"><div id="load-bar"></div></div>
 </div>
+<script>if(!new URLSearchParams(location.search).get('pdf'))document.getElementById('load-overlay').classList.remove('visible');</script>
 
 <!-- ═══════════════ TOAST ═══════════════ -->
 <div id="toast"></div>
@@ -691,31 +665,16 @@ canvas{display:block;}
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
     <div class="modal-tabs">
-      <div class="modal-tab active" onclick="switchTab('share')">Compartir</div>
+      <div class="modal-tab active" onclick="switchTab('share')">Enlace</div>
       <div class="modal-tab" onclick="switchTab('embed')">Embeber</div>
-      <div class="modal-tab" onclick="switchTab('qr')">QR Code</div>
     </div>
     <div class="modal-body">
       <!-- Share tab -->
       <div class="tab-panel active" id="tab-share">
-        <div class="share-grid">
-          <div class="share-card" id="card-copy" onclick="copyLink()">
-            <div class="sc-icon">🔗</div>
-            <div class="sc-label" id="lbl-copy">Copiar enlace</div>
-          </div>
-          <div class="share-card" onclick="shareWhatsapp()">
-            <div class="sc-icon">💬</div>
-            <div class="sc-label">WhatsApp</div>
-          </div>
-          <div class="share-card" onclick="shareEmail()">
-            <div class="sc-icon">📧</div>
-            <div class="sc-label">Email</div>
-          </div>
-          <div class="share-card" onclick="shareLinkedIn()">
-            <div class="sc-icon">💼</div>
-            <div class="sc-label">LinkedIn</div>
-          </div>
+        <div class="share-url-wrap">
+          <input type="text" id="share-url-input" readonly>
         </div>
+        <button class="modal-btn" id="btn-copy-link" onclick="copyLink()">🔗 Copiar enlace</button>
         <div class="privacy-note">🔒 <span>El PDF nunca se sube a ningún servidor.</span> Todo ocurre localmente en tu navegador.</div>
       </div>
 
@@ -726,11 +685,6 @@ canvas{display:block;}
         <div class="embed-note">
           Sube <code>flipdocs-pro.html</code> a cualquier host y pasa la URL del PDF como parámetro: <code>?pdf=https://tu-servidor.com/doc.pdf</code>
         </div>
-      </div>
-
-      <!-- QR tab -->
-      <div class="tab-panel" id="tab-qr">
-        <div class="qr-container" id="qr-container"></div>
       </div>
     </div>
   </div>
@@ -1240,6 +1194,21 @@ function toggleFullscreen() {
   }
 }
 
+const ICON_FULLSCREEN_ENTER = `<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M1 1h4v2H3v2H1V1zM9 1h4v4h-2V3H9V1zM1 9h2v2h2v2H1V9zM11 11H9v2h4V9h-2v2z"/></svg>`;
+const ICON_FULLSCREEN_EXIT  = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="2" y1="2" x2="12" y2="12"/><line x1="12" y1="2" x2="2" y2="12"/></svg>`;
+
+document.addEventListener('fullscreenchange', () => {
+  const btn = $('btn-fullscreen');
+  if(!btn) return;
+  if(document.fullscreenElement) {
+    btn.innerHTML = ICON_FULLSCREEN_EXIT;
+    btn.title = 'Salir de pantalla completa (F)';
+  } else {
+    btn.innerHTML = ICON_FULLSCREEN_ENTER;
+    btn.title = 'Pantalla completa (F)';
+  }
+});
+
 /* ════════════════════════════════════════════════
    THUMBNAILS
 ════════════════════════════════════════════════ */
@@ -1396,6 +1365,8 @@ function toast(msg) {
 ════════════════════════════════════════════════ */
 function openShareModal() {
   buildEmbedCode();
+  const urlInput = $('share-url-input');
+  if(urlInput) urlInput.value = window.location.href;
   shareModal.classList.add('open');
 }
 function closeModal() {
@@ -1404,13 +1375,12 @@ function closeModal() {
 
 function switchTab(id) {
   document.querySelectorAll('.modal-tab').forEach((t,i) => {
-    const ids = ['share','embed','qr'];
+    const ids = ['share','embed'];
     t.classList.toggle('active', ids[i] === id);
   });
   document.querySelectorAll('.tab-panel').forEach(p => {
     p.classList.toggle('active', p.id === 'tab-' + id);
   });
-  if(id === 'qr') generateQR();
 }
 
 function buildEmbedCode() {
@@ -1421,31 +1391,11 @@ function buildEmbedCode() {
 
 function copyLink() {
   navigator.clipboard.writeText(window.location.href).then(() => {
-    const card = $('card-copy');
-    const lbl  = $('lbl-copy');
-    card.classList.add('copied');
-    lbl.textContent = '¡Copiado!';
+    const btn = $('btn-copy-link');
+    btn.textContent = '✓ ¡Enlace copiado!';
     toast('🔗 Enlace copiado');
-    setTimeout(() => {
-      card.classList.remove('copied');
-      lbl.textContent = 'Copiar enlace';
-    }, 2200);
+    setTimeout(() => { btn.textContent = '🔗 Copiar enlace'; }, 2200);
   }).catch(() => toast('❌ No se pudo copiar'));
-}
-
-function shareWhatsapp() {
-  const url = encodeURIComponent(window.location.href);
-  const txt = encodeURIComponent((fileName || 'Documento') + ' — ' + window.location.href);
-  window.open('https://wa.me/?text=' + txt, '_blank');
-}
-function shareEmail() {
-  const subj = encodeURIComponent('Te comparto: ' + (fileName || 'Documento'));
-  const body = encodeURIComponent('Hola,\n\nTe comparto este documento interactivo:\n' + window.location.href);
-  window.location.href = 'mailto:?subject=' + subj + '&body=' + body;
-}
-function shareLinkedIn() {
-  const url = encodeURIComponent(window.location.href);
-  window.open('https://www.linkedin.com/sharing/share-offsite/?url=' + url, '_blank');
 }
 
 function copyEmbed() {
@@ -1453,70 +1403,6 @@ function copyEmbed() {
   navigator.clipboard.writeText(code).then(() => {
     toast('📋 Código embed copiado');
   }).catch(() => toast('❌ No se pudo copiar'));
-}
-
-let qrGenerated = false;
-function generateQR() {
-  if(qrGenerated) return;
-  const container = $('qr-container');
-  container.innerHTML = '';
-
-  const proto = window.location.protocol;
-  const host  = window.location.hostname;
-  const isLocal = proto === 'file:' || host === 'localhost' || host === '127.0.0.1' || host === '';
-
-  if(isLocal) {
-    container.innerHTML = `
-      <div class="qr-placeholder">
-        <h4>QR disponible al hostear</h4>
-        <p>El código QR se genera automáticamente cuando abres<br>KidoDocs desde una URL pública.</p>
-        <div class="host-list">
-          <div class="host-chip">GitHub Pages</div>
-          <div class="host-chip">Netlify</div>
-          <div class="host-chip">Vercel</div>
-        </div>
-      </div>`;
-    return;
-  }
-
-  // Load qrcodejs if not already loaded
-  const loadQR = () => new Promise((resolve, reject) => {
-    if(window.QRCode) { resolve(); return; }
-    const s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
-    s.onload  = resolve;
-    s.onerror = reject;
-    document.head.appendChild(s);
-  });
-
-  loadQR().then(() => {
-    const wrap = document.createElement('div');
-    wrap.id = 'qr-canvas-wrap';
-    container.appendChild(wrap);
-
-    new QRCode(wrap, {
-      text: window.location.href,
-      width: 200, height: 200,
-      colorDark: '#000', colorLight: '#fff',
-      correctLevel: QRCode.CorrectLevel.M
-    });
-
-    const dlBtn = document.createElement('button');
-    dlBtn.className = 'modal-btn';
-    dlBtn.textContent = 'Descargar QR';
-    dlBtn.onclick = () => {
-      const img = wrap.querySelector('img') || wrap.querySelector('canvas');
-      const url = img.tagName === 'CANVAS' ? img.toDataURL() : img.src;
-      const a = document.createElement('a');
-      a.href = url; a.download = 'qr-kidodocs.png';
-      a.click();
-      toast('📥 QR descargado');
-    };
-    container.appendChild(dlBtn);
-    qrGenerated = true;
-  }).catch(() => {
-    container.innerHTML = '<p style="color:var(--muted);font-size:13px;text-align:center">No se pudo cargar la librería QR</p>';
-  });
 }
 
 /* ════════════════════════════════════════════════
