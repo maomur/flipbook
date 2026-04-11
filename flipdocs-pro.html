@@ -1326,8 +1326,8 @@ function updateUI() {
   $('btn-first').disabled = cur <= (spread ? 2 : 1);
   $('btn-last').disabled  = cur >= total;
 
-  navPrev.disabled = cur <= (spread ? 2 : 1);
-  navNext.disabled = cur >= total;
+  navPrev.disabled = dblZoomed || cur <= (spread ? 2 : 1);
+  navNext.disabled = dblZoomed || cur >= total;
 
   // Ícono y tooltip del botón de spread: 2 hojas = doble página, 1 hoja = página única
   if(spread) {
@@ -1581,25 +1581,28 @@ stage.addEventListener('mouseup', e => {
   stage.style.cursor = 'grab';
 
   if(!mouseDrag) {
-    // Delay single-click navigation so dblclick can cancel it
-    clickCount++;
-    clickClientX = e.clientX;
-    clickClientY = e.clientY;
-    clearTimeout(clickTimer);
-    clickTimer = setTimeout(() => {
-      if(clickCount === 1) {
-        const rect  = stage.getBoundingClientRect();
-        const relX  = clickClientX - rect.left;
-        const third = rect.width / 3;
-        if(relX < third)        prevPage();
-        else if(relX > third*2) nextPage();
-      }
-      clickCount = 0;
-    }, 240);
+    if(!dblZoomed) {
+      // Delay single-click navigation so dblclick can cancel it
+      clickCount++;
+      clickClientX = e.clientX;
+      clickClientY = e.clientY;
+      clearTimeout(clickTimer);
+      clickTimer = setTimeout(() => {
+        if(clickCount === 1) {
+          const rect  = stage.getBoundingClientRect();
+          const relX  = clickClientX - rect.left;
+          const third = rect.width / 3;
+          if(relX < third)        prevPage();
+          else if(relX > third*2) nextPage();
+        }
+        clickCount = 0;
+      }, 240);
+    }
     return;
   }
 
   clickCount = 0;
+  if(dblZoomed) return; // panning only when zoomed in
   // Swipe navigation
   const absDX = Math.abs(totalDX);
   if(absDX > 50) {
@@ -1714,7 +1717,7 @@ stage.addEventListener('touchend', e => {
     renderPages();
     return;
   }
-  if(e.changedTouches.length === 1) {
+  if(!dblZoomed && e.changedTouches.length === 1) {
     const dx = e.changedTouches[0].clientX - tx0;
     const dy = e.changedTouches[0].clientY - ty0;
     if(Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) {
