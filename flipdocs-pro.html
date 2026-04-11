@@ -234,7 +234,7 @@ canvas{display:block;}
 .thumb-item.active .thumb-canvas-wrap{border-color:var(--accent);}
 .thumb-label{font-size:10px;color:var(--muted);}
 
-/* Stage */
+/* Stage — padding is set in JS to center the book; overflow:auto scrolls freely in all directions */
 #stage{
   flex:1;overflow:auto;
   cursor:grab;user-select:none;
@@ -242,19 +242,12 @@ canvas{display:block;}
 }
 #stage:active{cursor:grabbing;}
 #stage.zoom-cursor{cursor:zoom-in;}
-/* Inner: ≥ 100% of stage in both axes so margin:auto can center the book;
-   NO justify-content:center — that clips left overflow even with overflow:auto */
-#stage-inner{
-  display:flex;align-items:center;
-  min-width:100%;min-height:100%;
-  padding:30px 20px;box-sizing:border-box;
-}
 
-/* Book wrap: margin:auto centers when content < stage; collapses to 0 when larger → scroll works both directions */
+/* Book wrap */
 #book-wrap{
   perspective:3000px;flex-shrink:0;
   position:relative;
-  margin:0 auto;
+  width:fit-content;
 }
 #book{
   display:flex;align-items:stretch;
@@ -476,7 +469,6 @@ canvas{display:block;}
   .tb-btn{width:30px;height:30px;}
   .page-pill{padding:0 8px;}
   .tb-text-btn span.label{display:none;}
-  #stage{padding:16px 10px;}
 }
 @media(max-width:480px){
   .tb-group.zoom-group .zoom-badge{min-width:44px;}
@@ -601,29 +593,27 @@ canvas{display:block;}
 
     <div id="render-bar-wrap"><div id="render-bar"></div></div>
     <div id="stage">
-      <div id="stage-inner">
-        <div id="book-wrap">
-          <div id="book">
-            <div id="pg-left">
-              <canvas id="cv-left"></canvas>
-              <div class="fold-shadow"></div>
-              <div class="curl-hint"></div>
+      <div id="book-wrap">
+        <div id="book">
+          <div id="pg-left">
+            <canvas id="cv-left"></canvas>
+            <div class="fold-shadow"></div>
+            <div class="curl-hint"></div>
+          </div>
+          <div id="spine"></div>
+          <div id="pg-right">
+            <canvas id="cv-right"></canvas>
+            <div class="fold-shadow"></div>
+            <div class="curl-hint"></div>
+          </div>
+          <div id="flip-page">
+            <div class="flip-face flip-front-face">
+              <canvas id="cv-flip-front"></canvas>
+              <div class="flip-shadow" id="flip-shadow-front"></div>
             </div>
-            <div id="spine"></div>
-            <div id="pg-right">
-              <canvas id="cv-right"></canvas>
-              <div class="fold-shadow"></div>
-              <div class="curl-hint"></div>
-            </div>
-            <div id="flip-page">
-              <div class="flip-face flip-front-face">
-                <canvas id="cv-flip-front"></canvas>
-                <div class="flip-shadow" id="flip-shadow-front"></div>
-              </div>
-              <div class="flip-face flip-back-face">
-                <canvas id="cv-flip-back"></canvas>
-                <div class="flip-shadow" id="flip-shadow-back"></div>
-              </div>
+            <div class="flip-face flip-back-face">
+              <canvas id="cv-flip-back"></canvas>
+              <div class="flip-shadow" id="flip-shadow-back"></div>
             </div>
           </div>
         </div>
@@ -841,8 +831,6 @@ function backToUpload() {
 async function fitPage(doRender = true) {
   if(!pdf) return;
   dblZoomed = false;
-  stage.scrollLeft = 0;
-  stage.scrollTop  = 0;
   const page = await pdf.getPage(1);
   const vp0  = page.getViewport({ scale: 1 });
   const sw   = stage.clientWidth  - 60;
@@ -897,6 +885,10 @@ async function renderPages(dir) {
   }
 
   updateUI();
+
+  // Update padding so the book is reachable in all scroll directions
+  if(dblZoomed) updateStagePadding();
+  else          centerBook();
 
   if(dir) await doFlip(dir);
   else    updateThumbActive();
@@ -1289,6 +1281,33 @@ function showLoad(msg, pct) {
 }
 function hideLoad() {
   loadOverlay.classList.remove('visible');
+}
+
+/* ════════════════════════════════════════════════
+   STAGE CENTERING
+   Padding is set dynamically so the book is always
+   centered when it fits, and fully scrollable (in
+   both axes) when zoomed in — no flex-centering on
+   the scroll container, which clips left overflow.
+════════════════════════════════════════════════ */
+function _stagePad() {
+  const bw = $('book-wrap');
+  const bwW = bw.offsetWidth;
+  const bwH = bw.offsetHeight;
+  const sw  = stage.clientWidth;
+  const sh  = stage.clientHeight;
+  const pH  = Math.max(30, Math.round((sw - bwW) / 2));
+  const pV  = Math.max(30, Math.round((sh - bwH) / 2));
+  stage.style.padding = `${pV}px ${pH}px`;
+  return { pH, pV, bwW, bwH, sw, sh };
+}
+/* Set padding only — used when dblZoomed so we don't reset scroll */
+function updateStagePadding() { _stagePad(); }
+/* Set padding AND scroll to center book */
+function centerBook() {
+  const { pH, pV, bwW, bwH, sw, sh } = _stagePad();
+  stage.scrollLeft = Math.max(0, Math.round((bwW + pH * 2 - sw) / 2));
+  stage.scrollTop  = Math.max(0, Math.round((bwH + pV * 2 - sh) / 2));
 }
 
 /* ════════════════════════════════════════════════
