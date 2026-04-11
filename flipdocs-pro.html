@@ -918,6 +918,8 @@ function backToUpload() {
 ════════════════════════════════════════════════ */
 async function fitPage(doRender = true) {
   if(!pdf) return;
+  stage.scrollLeft = 0;
+  stage.scrollTop  = 0;
   const page = await pdf.getPage(1);
   const vp0  = page.getViewport({ scale: 1 });
   const sw   = stage.clientWidth  - 60;
